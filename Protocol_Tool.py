@@ -1,61 +1,59 @@
 from datetime import datetime
 import fitz  # PyMuPDF
 import re
+import requests
+from dotenv import load_dotenv
+import os
+
+# Load the environment variables from .env file
+load_dotenv()
+api_key = os.getenv('API_KEY')
+
+#full text extraction for Summarization & Project
+def extract_text_from_pdf(file_path):
+    try:
+        document = fitz.open(file_path)
+        text = "".join([page.get_text() for page in document])
+        document.close()
+        return text
+    except Exception as e:
+        print(f"Error opening/reading the PDF file: {e}")
+        return None
 
 
 def extract_info_from_pdf(file_path):
     try:
+        # Improved structure by using a context manager for handling the document
         with fitz.open(file_path) as pdf_document:
-            # Extract text from the first page
+            # Initializing a dictionary to hold all the extracted data
+            extracted_data = {}
+            
+            # Check if the PDF has enough pages to avoid IndexError
+            if len(pdf_document) < 3:
+                print("PDF does not have enough pages to extract all data.")
+                return None
+
+            # Extract text from the first three pages (assuming they contain relevant info)
             first_page_text = pdf_document[0].get_text()
+            toc_text = "".join([pdf_document[i].get_text() for i in range(1, min(3, len(pdf_document)))])
 
-            # Extract text from the second and third pages for Table of Contents
-            second_page_text = pdf_document[1].get_text() if len(pdf_document) > 1 else ""
-            third_page_text = pdf_document[2].get_text() if len(pdf_document) > 2 else ""
+            # Extract specific details
+            extracted_data["Publish Standard Body"] = extract_publishing_standard_body(first_page_text)
+            extracted_data["Protocol Name"] = extract_protocol_name(first_page_text)
+            extracted_data["Protocol Version"] = extract_protocol_version(first_page_text)
+            extracted_data["Release Date"] = extract_release_date(first_page_text)
+            extracted_data["Protocol Code"] = extract_protocol_code(first_page_text)
+            extracted_data["GHG Emission Type"] = extract_emissions_type(toc_text)
 
-            # Combine second and third page texts
-            toc_text = second_page_text + third_page_text
+            # Hardcoded values (consider extracting dynamically if format standardizes)
+            extracted_data["Additionality Requirements"] = "The project must demonstrate that its activities result in greater GHG reductions or removals than what would naturally occur in a standard scenario, proving that these activities are a direct result of carbon market incentives. Key to this requirement is the concept of 'regulatory surplus,' which requires that the project activities are not required by any existing government policies or laws."
+            extracted_data["Monitoring Project Time, Project Longevity"] = "Under the VCS Standard, projects are required to have a minimum project longevity of 40 years."
 
-            # Extract publishing standard body
-            publishing_body = extract_publishing_standard_body(first_page_text)
-
-            # Extract protocol name
-            protocol_name = extract_protocol_name(first_page_text)
-
-            # Extract protocol version
-            protocol_version = extract_protocol_version(first_page_text)
-
-            # Extract release date
-            release_date = extract_release_date(first_page_text)
-
-            # Extract protocol code
-            protocol_code = extract_protocol_code(first_page_text)
-
-            # Extract GHG Emission Type from the Table of Contents
-            emission_type = extract_emissions_type(toc_text)
-
-            # Extract additionality requirements (hardcoded for now)
-            additionality_reqs = "The project must demonstrate that its activities result in greater GHG reductions or removals than what would naturally occur in a standard scenario, proving that these activities are a direct result of carbon market incentives. Key to this requirement is the concept of 'regulatory surplus,' which requires that the project activities are not required by any existing government policies or laws."
-
-            # Extract monitoring project time (hardcoded for now)
-            project_time = "Under the VCS Standard, projects are required to have a minimum project longevity of 40 years."
-
-            return {
-                "Publish Standard Body": publishing_body,
-                "Protocol Name": protocol_name,
-                "Protocol Version": protocol_version,
-                "Release Date": release_date,
-                "Protocol Code": protocol_code,
-                "GHG Emission Type": emission_type,
-                "Additionality Requirements": additionality_reqs,
-                "Monitoring Project Time, Project Longevity": project_time,
-            }
+            return extracted_data
 
     except Exception as e:
         print(f"Error extracting information: {e}")
         return None
-
-
 
 def extract_publishing_standard_body(text):
     if "VCS" in text or "Verified Carbon Standard" in text:
@@ -65,14 +63,6 @@ def extract_publishing_standard_body(text):
     else:
         return "Unknown"
 
-'''
-def extract_protocol_name(text):
-    lines = text.split('\n')
-    for line in lines:
-        if line.strip().startswith("Methodology"):
-            return line.strip()
-    return None
-'''
 def extract_protocol_name(text):
     match = re.search(r'VM\d{4}', text)
     if match:
@@ -130,15 +120,42 @@ def extract_project_time(text):
     if "VCS" in text or "Verified Carbon Standard" in text:
         return "Under the VCS Standard, projects are required to have a minimum project longevity of 40 years."
 
+def summarize_text(text, api_key):
+    url = "https://api.openai.com/v1/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    data = {
+        "model":"gpt-3.5-turbo",#specify model
+        "prompt": f"Summarize the following text: \n\n{text}",
+        "max_tokens": 150,  # Adjust based on how detailed you want the summary
+        "temperature": 0.5 #adjust creativity / variability of the summary
+    }
+
+    response = requests.post(url, json=data, headers=headers)
+    return response.json()
+
+def main(file_path):
+    text = extract_text_from_pdf(file_path)
+    if text is not None:
+        summary_response = summarize_text(text, api_key)
+        print("Summary of the Document:")
+        print(summary_response['choices'][0]['text'])
+
+        extracted_info = extract_info_from_pdf(file_path)
+        if extracted_info:
+            print("Extracted Information:")
+            for key, value in extracted_info.items():
+                print(f"{key}: {value}")
+    else:
+        print("Failed to extract text from the PDF.")
+
+# Usage
+file_path = 'C:/Users/User/OneDrive/Desktop/Local - Green Metric Technologies/Green Analytics/Carbon Guild/Protocol_Tool/Protocols/VM0025-Campus-Clean-Energy-and-Energy-Efficiency-v1.0.pdf'
+main(file_path, api_key)
+
+#Detemine execution context
 if __name__ == "__main__":
-    verra_pdf_document_path = 'C:/Users/User/OneDrive/Desktop/Local - Green Metric Technologies/Green Analytics/Carbon Guild/Protocol_Tool/Protocols/VM0025-Campus-Clean-Energy-and-Energy-Efficiency-v1.0.pdf'  #Replace with your document's path
-
-    extracted_info = extract_info_from_pdf(verra_pdf_document_path)
-
-    if extracted_info:
-        print("Extracted Information:")
-        for key, value in extracted_info.items():
-            print(f"{key}: {value}")
-
-
-#testing
+    file_path = 'path_to_your_pdf_file.pdf'
+    main(file_path)
