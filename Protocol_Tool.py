@@ -5,9 +5,16 @@ import requests
 from dotenv import load_dotenv
 import os
 
-# Load the environment variables from .env file
+# Specify the correct path to your .env file if it's not in the root
 load_dotenv()
+
 api_key = os.getenv('API_KEY')
+if not api_key:
+    print("API key not loaded. Check your .env file and path.")
+else:
+    print("API key loaded successfully.")
+
+file_path = r'C:\Users\User\OneDrive\Desktop\Local - Green Metric Technologies\Green Analytics\Carbon Guild\CG-Protocol-Tool\Protocols\VM0025-Campus-Clean-Energy-and-Energy-Efficiency-v1.0.pdf'
 
 #full text extraction for Summarization & Project
 def extract_text_from_pdf(file_path):
@@ -19,7 +26,6 @@ def extract_text_from_pdf(file_path):
     except Exception as e:
         print(f"Error opening/reading the PDF file: {e}")
         return None
-
 
 def extract_info_from_pdf(file_path):
     try:
@@ -127,21 +133,29 @@ def summarize_text(text, api_key):
         "Content-Type": "application/json",
     }
     data = {
-        "model":"gpt-3.5-turbo",#specify model
+        "model":"gpt-3.5-turbo", #specify model
         "prompt": f"Summarize the following text: \n\n{text}",
         "max_tokens": 150,  # Adjust based on how detailed you want the summary
         "temperature": 0.5 #adjust creativity / variability of the summary
     }
 
     response = requests.post(url, json=data, headers=headers)
-    return response.json()
+    response_data = response.json()
+    if 'choices' not in response_data or not response_data['choices']:
+        print("Failed to retrieve summary:")
+        print(response_data)  # This will show what the API actually returned
+        return None
+    return response_data['choices'][0]['text']
 
 def main(file_path):
     text = extract_text_from_pdf(file_path)
     if text is not None:
         summary_response = summarize_text(text, api_key)
-        print("Summary of the Document:")
-        print(summary_response['choices'][0]['text'])
+        if summary_response:
+            print("Summary of the Document:")
+            print(summary_response)
+        else:
+            print("No summary available.")
 
         extracted_info = extract_info_from_pdf(file_path)
         if extracted_info:
@@ -152,10 +166,9 @@ def main(file_path):
         print("Failed to extract text from the PDF.")
 
 # Usage
-file_path = 'C:/Users/User/OneDrive/Desktop/Local - Green Metric Technologies/Green Analytics/Carbon Guild/Protocol_Tool/Protocols/VM0025-Campus-Clean-Energy-and-Energy-Efficiency-v1.0.pdf'
-main(file_path, api_key)
+main(file_path)
 
 #Detemine execution context
 if __name__ == "__main__":
-    file_path = 'path_to_your_pdf_file.pdf'
+    file_path = r'C:\Users\User\OneDrive\Desktop\Local - Green Metric Technologies\Green Analytics\Carbon Guild\CG-Protocol-Tool\Protocols\VM0025-Campus-Clean-Energy-and-Energy-Efficiency-v1.0.pdf'
     main(file_path)
