@@ -5,7 +5,7 @@ import requests
 from dotenv import load_dotenv
 import os
 
-# Specify the correct path to your .env file if it's not in the root
+# Specify the correct path to your .env file if it's not in the root - Load API Key
 #load_dotenv()
 api_key = os.getenv('API_KEY')
 if not api_key:
@@ -14,7 +14,7 @@ else:
     print("API key loaded successfully.")
 
 
-file_path = r'C:\Users\User\OneDrive\Desktop\Local - Green Metric Technologies\Green Analytics\Carbon Guild\CG-Protocol-Tool\Protocols\CAR-US-and-Canada-Biochar-Protocol-V1.0.pdf'
+file_path = r'C:\Users\User\OneDrive\Desktop\Local - Green Metric Technologies\Green Analytics\Carbon Guild\CG-Protocol-Tool\Protocols\VM0047_ARR_v1.0-1.pdf'
 
 #full text extraction for Summarization & Project
 def extract_text_from_pdf(file_path):
@@ -27,6 +27,7 @@ def extract_text_from_pdf(file_path):
         print(f"Error opening/reading the PDF file: {e}")
         return None
 
+#Extract specific details
 def extract_info_from_pdf(file_path):
     try:
         # Improved structure by using a context manager for handling the document
@@ -49,14 +50,14 @@ def extract_info_from_pdf(file_path):
             standard_body = extract_publishing_standard_body(first_six_pages_text)
             extracted_data["Publish Standard Body"] = standard_body
 
-            #Extract Specific details
+            #Extract Specific details - Python
             extracted_data["Protocol Name"] = extract_protocol_name(first_page_text)
             extracted_data["Protocol Version"] = extract_protocol_version(first_page_text)
             extracted_data["Release Date"] = extract_release_date(first_page_text)
             extracted_data["Protocol Code"] = extract_protocol_code(first_page_text)
             extracted_data["GHG Emission Type"] = extract_emissions_type(first_six_pages_text)
 
-            # Hardcoded values (consider extracting dynamically if format standardizes)
+            # Hardcoded values (consider extracting dynamically if format standardizes) #Will likely be passed off to the LLM
             extracted_data["Additionality Requirements"] = extract_additionality_reqs(standard_body)
             extracted_data["Crediting Period"] = extract_crediting_period(standard_body)
             extracted_data["Project Longevity"] = extract_project_time(standard_body)
@@ -141,7 +142,8 @@ def extract_emissions_type(text):
         return 'Reduction'
     else:
         return "Unknown"
-    
+
+#Likely will need to use the LLM to extract this information.    
 def extract_geographical_applicability(text):
     # Define keywords or phrases for regions
     regions = {
@@ -167,7 +169,7 @@ def extract_geographical_applicability(text):
     elif detected_regions:
         return ', '.join(detected_regions)  # Join all found regions with comma
 
-    return "Unknown"  # Default return if no regions are matched
+    return "Global"  # Default return if no regions are matched
 
 def extract_additionality_reqs(text):
     if "VCS" in text or "Verified Carbon Standard" in text:
@@ -181,75 +183,124 @@ def extract_crediting_period(text):
     if "CAR" in text or "Climate Action Reserve" in text:
         return "Up to 100 years"
 
-
 def extract_project_time(text):
     if "VCS" in text or "Verified Carbon Standard" in text:
         return "Under the VCS Standard, projects are required to have a minimum project longevity of 40 years."
     if "CAR" in text or "Climate Action Reserve" in text:
         return "100 years"
 
-def summarize_text(text, api_key):
+#LLM Extracted data - Send to OpenAI API
+def summarize_and_extract_details(text, api_key):
     url = "https://api.openai.com/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
+    # Expanded prompt to ask for more specific details
+    prompt_text = (
+    "Provide the following details for this protocol, each separated by '###':\n"
+    "- Project Summary: A brief overview of the protocol in less than 100 words.\n"
+    "- Project Activities: Describe what actions are required by this protocol.\n"
+    "- Geographical Applicability: Firstly state where the methodology is applied 'Global', 'U.S', 'U.S and Canada', 'Europe' or 'Asia'. Then provide extra details if necessary.\n"
+    "- Additionality Requirements: Explain the criteria for additionality.\n"
+    "- Crediting Period: Define the crediting period, if specified.\n"
+    "- Project Longevity: Describe the expected duration of project activities.\n"
+    "- Baseline Methodology: First state whether the methodology is 'Historical', 'Dynamic', or 'Both'. Then, provide a detailed explanation of how it works.\n"
+    "- Protocol Type (Taxonomy): Based on the Oxford Protocols, specify the taxonomy category.\n\n"
+    "### Project Summary\n"
+    "### Project Activities\n"
+    "### Geographical Applicability\n"
+    "### Additionality Requirements\n"
+    "### Crediting Period\n"
+    "### Project Longevity\n"
+    "### Baseline Methodology\n"
+    "### Protocol Type (Taxonomy)\n\n"
+    f"{text}"
+)
+
     data = {
-        "model": "gpt-3.5-turbo",  # Specify the model, assuming it's suitable for chat
+        "model": "gpt-3.5-turbo",
         "messages": [
             {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": f"Summarize this text using less than 100 words: \n\n{text}"}
+            {"role": "user", "content": prompt_text}
         ],
-        "max_tokens": 150,  # Adjust based on desired summary length
-        "temperature": 0.5  # Adjust creativity / variability of the summary
+        "max_tokens": 800,  # Increased token limit to accommodate more detailed queries
+        "temperature": 0  # Adjusted for a balance between creativity and relevance
     }
 
     response = requests.post(url, json=data, headers=headers)
     response_data = response.json()
     if 'error' in response_data:
-        print("Failed to retrieve summary due to API error:")
-        print(response_data['error']['message'])
+        print("Failed to retrieve summary due to API error:", response_data['error']['message'])
         return None
     if 'choices' not in response_data or not response_data['choices']:
-        print("No summary available.")
+        print("No response available.")
         return None
+
+    # Extract and return detailed responses from the model's output
     return response_data['choices'][0]['message']['content']
 
-def main(file_path):
+
+def parse_response_details(response_text):
+    details = {}
+    sections = response_text.split("###")
+
+    # Define a dictionary to map headers to their processing labels
+    header_to_label = {
+        'Project Summary': 'Project Summary',
+        'Project Activities': 'Project Activities',
+        'Geographical Applicability': 'Geographical Applicability',
+        'Additionality Requirements': 'Additionality Requirements',
+        'Crediting Period': 'Crediting Period',
+        'Project Longevity': 'Project Longevity',
+        'Baseline Methodology': 'Baseline Methodology',
+        'Protocol Type (Taxonomy)': 'Protocol Type (Taxonomy)'
+    }
+
+    # Process each section
+    for section in sections:
+        for header, label in header_to_label.items():
+            if header in section:
+                # Remove the header from the section and strip unwanted characters
+                content = section.replace(header, '').strip()
+                # Remove leading hyphens and extra spaces
+                content = content.lstrip('- ').strip()
+                details[label] = content
+                break
+
+    return details
+
+
+#Combine specific details & LLM extracted data
+def main(file_path, api_key):
     text = extract_text_from_pdf(file_path)
     if text is not None:
-        #Summary
-        summary_response = summarize_text(text, api_key)
-        if summary_response:
-            print("Summary of the Document:")
-            print(summary_response)
-        else:
-            print("No summary available.")
-
-        # Extract geographical applicability
-        geographical_applicability = extract_geographical_applicability(text)
-        print(f"Geographical Applicability: {geographical_applicability}")
-
-        #Execute detailed text info / datapoints
+        # Execute detailed text info / datapoints - Python
         extracted_info = extract_info_from_pdf(file_path)
         if extracted_info:
             print("Extracted Information:")
             for key, value in extracted_info.items():
                 print(f"{key}: {value}")
+
+        #LLM Data
+        response = summarize_and_extract_details(text, api_key)
+        if response:
+            parsed_details = parse_response_details(response)
+            for key, value in parsed_details.items():
+                print(f"{key}: {value}")
     else:
         print("Failed to extract text from the PDF.")
 
-# Usage
-#main(file_path)
-
 #Detemine execution context
 if __name__ == "__main__":
-    main(file_path)
+    main(file_path,api_key)
 
 
 
-"""Test pdfs:
+"""
+Test pdfs:
 CAR-US-and-Canada-Biochar-Protocol-V1.0.pdf
 VM0025-Campus-Clean-Energy-and-Energy-Efficiency-v1.0.pdf
 ACR-ACoF-Methodology-v1.0.pdf
+VM0047_ARR_v1.0-1.pdf
 """
