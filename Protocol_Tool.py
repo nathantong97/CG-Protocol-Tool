@@ -206,7 +206,7 @@ def summarize_and_extract_details(text, api_key):
     "- Crediting Period: Define the crediting period, if specified.\n"
     "- Project Longevity: Describe the expected duration of project activities.\n"
     "- Baseline Methodology: First state whether the methodology is 'Historical', 'Dynamic', or 'Both'. Then, provide a detailed explanation of how it works.\n"
-    "- Protocol Type (Taxonomy): Based on the Oxford Protocols, specify the taxonomy category.\n\n"
+    "- Protocol Type (Taxonomy): First state the taxonomy category based on the Oxford Protocols.\n\n"
     "### Project Summary\n"
     "### Project Activities\n"
     "### Geographical Applicability\n"
@@ -305,8 +305,58 @@ ACR-ACoF-Methodology-v1.0.pdf
 VM0047_ARR_v1.0-1.pdf
 """
 
-#Test
 
 
+"""
+def summarize_and_extract_details_with_claude(text, claude_api_key):
+    # Assuming the base URL and endpoint for Claude's API
+    url = "https://api.anthropic.com/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    # Expanded prompt to ask for more specific details, similarly structured
+    prompt_text = (
+        "Provide the following details for this protocol, each separated by '###':\n"
+        "- Project Summary: A brief overview of the protocol in less than 100 words.\n"
+        "- Project Activities: Describe what actions are required by this protocol.\n"
+        "- Geographical Applicability: Firstly state where the methodology is applied 'Global', 'U.S', 'U.S and Canada', 'Europe' or 'Asia'. Then provide extra details if necessary.\n"
+        "- Additionality Requirements: Explain the criteria for additionality.\n"
+        "- Crediting Period: Define the crediting period, if specified.\n"
+        "- Project Longevity: Describe the expected duration of project activities.\n"
+        "- Baseline Methodology: First state whether the methodology is 'Historical', 'Dynamic', or 'Both'. Then, provide a detailed explanation of how it works.\n"
+        "- Protocol Type (Taxonomy): First state the taxonomy category based on the Oxford Protocols.\n\n"
+        "### Project Summary\n"
+        "### Project Activities\n"
+        "### Geographical Applicability\n"
+        "### Additionality Requirements\n"
+        "### Crediting Period\n"
+        "### Project Longevity\n"
+        "### Baseline Methodology\n"
+        "### Protocol Type (Taxonomy)\n\n"
+        f"{text}"
+    )
 
+    data = {
+        "model": "claude-instant",  # Assuming Claude has a model identifier, adjust accordingly
+        "messages": [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": prompt_text}
+        ],
+        "max_tokens": 800,  # Assuming similar parameter exists
+        "temperature": 0.5  # Adjusted for a balance between creativity and relevance
+    }
 
+    response = requests.post(url, json=data, headers=headers)
+    response_data = response.json()
+    if 'error' in response_data:
+        print("Failed to retrieve summary due to API error:", response_data['error']['message'])
+        return None
+    if 'choices' not in response_data or not response_data['choices']:
+        print("No response available.")
+        return None
+
+    # Extract and return detailed responses from the model's output
+    return response_data['choices'][0]['message']['content']
+
+"""
