@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 import os
 
 # Specify the correct path to your .env file if it's not in the root - Load API Key
-#load_dotenv()
+load_dotenv()
 api_key = os.getenv('API_KEY')
 if not api_key:
     print("API key not loaded. Check your .env file and path.")
@@ -14,7 +14,7 @@ else:
     print("API key loaded successfully.")
 
 
-file_path = r'C:\Users\User\OneDrive\Desktop\Local - Green Metric Technologies\Green Analytics\Carbon Guild\CG-Protocol-Tool\Protocols\VM0047_ARR_v1.0-1.pdf'
+file_path = r'C:\Users\User\OneDrive\Desktop\Local - Green Metric Technologies\Green Analytics\Carbon Guild\CG-Protocol-Tool\Protocols\VM0025-Campus-Clean-Energy-and-Energy-Efficiency-v1.0.pdf'
 
 #full text extraction for Summarization & Project
 def extract_text_from_pdf(file_path):
