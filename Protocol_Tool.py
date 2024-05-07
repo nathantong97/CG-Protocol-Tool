@@ -4,11 +4,13 @@ import re
 import requests
 from dotenv import load_dotenv
 import os
+from anthropic import Anthropic
 
 # Specify the correct path to your .env file if it's not in the root - Load API Key
 load_dotenv()
-api_key = os.getenv('API_KEY')
-if not api_key:
+openai_api_key = os.getenv('OPENAI_API_KEY')
+claude_api_key = os.getenv('CLAUDE_API_KEY')
+if not claude_api_key:
     print("API key not loaded. Check your .env file and path.")
 else:
     print("API key loaded successfully.")
@@ -189,11 +191,13 @@ def extract_project_time(text):
     if "CAR" in text or "Climate Action Reserve" in text:
         return "100 years"
 
-#LLM Extracted data - Send to OpenAI API
-def summarize_and_extract_details(text, api_key):
+
+#LLM Extracted data - OpenAI specific blocks
+'''
+def summarize_and_extract_details(text, openai_api_key):
     url = "https://api.openai.com/v1/chat/completions"
     headers = {
-        "Authorization": f"Bearer {api_key}",
+        "Authorization": f"Bearer {openai_api_key}",
         "Content-Type": "application/json",
     }
     # Expanded prompt to ask for more specific details
@@ -239,8 +243,8 @@ def summarize_and_extract_details(text, api_key):
 
     # Extract and return detailed responses from the model's output
     return response_data['choices'][0]['message']['content']
-
-
+'''
+''' #parse openAI_api response
 def parse_response_details(response_text):
     details = {}
     sections = response_text.split("###")
@@ -269,52 +273,12 @@ def parse_response_details(response_text):
                 break
 
     return details
+'''
 
-
-#Combine specific details & LLM extracted data
-def main(file_path, api_key):
-    text = extract_text_from_pdf(file_path)
-    if text is not None:
-        # Execute detailed text info / datapoints - Python
-        extracted_info = extract_info_from_pdf(file_path)
-        if extracted_info:
-            print("Extracted Information:")
-            for key, value in extracted_info.items():
-                print(f"{key}: {value}")
-
-        #LLM Data
-        response = summarize_and_extract_details(text, api_key)
-        if response:
-            parsed_details = parse_response_details(response)
-            for key, value in parsed_details.items():
-                print(f"{key}: {value}")
-    else:
-        print("Failed to extract text from the PDF.")
-
-#Detemine execution context
-if __name__ == "__main__":
-    main(file_path,api_key)
-
-
-
-"""
-Test pdfs:
-CAR-US-and-Canada-Biochar-Protocol-V1.0.pdf
-VM0025-Campus-Clean-Energy-and-Energy-Efficiency-v1.0.pdf
-ACR-ACoF-Methodology-v1.0.pdf
-VM0047_ARR_v1.0-1.pdf
-"""
-
-
-
-"""
+#LLM Extraction - Claude specific function & parsing function
 def summarize_and_extract_details_with_claude(text, claude_api_key):
-    # Assuming the base URL and endpoint for Claude's API
-    url = "https://api.anthropic.com/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
+    client = Anthropic(api_key=claude_api_key)
+
     # Expanded prompt to ask for more specific details, similarly structured
     prompt_text = (
         "Provide the following details for this protocol, each separated by '###':\n"
@@ -337,26 +301,78 @@ def summarize_and_extract_details_with_claude(text, claude_api_key):
         f"{text}"
     )
 
-    data = {
-        "model": "claude-instant",  # Assuming Claude has a model identifier, adjust accordingly
-        "messages": [
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": prompt_text}
-        ],
-        "max_tokens": 800,  # Assuming similar parameter exists
-        "temperature": 0.5  # Adjusted for a balance between creativity and relevance
+    try:
+        message = client.messages.create(
+            max_tokens=1000,
+            temperature=0.0,
+            system="You are a helpful assistant, extracting key data points from new carbon credit protocols",
+            messages=[
+                {"role": "user", "content": prompt_text}
+            ],
+            model="claude-3-haiku-20240307"
+        )
+        return message.content
+    except Exception as e:
+        print("Failed to retrieve summary due to API error:", e)
+        return None
+#anthropic specific parsing function
+def parse_response_details(response_texts):
+    details = {}
+    header_to_label = {
+        'Project Summary': 'Project Summary',
+        'Project Activities': 'Project Activities',
+        'Geographical Applicability': 'Geographical Applicability',
+        'Additionality Requirements': 'Additionality Requirements',
+        'Crediting Period': 'Crediting Period',
+        'Project Longevity': 'Project Longevity',
+        'Baseline Methodology': 'Baseline Methodology',
+        'Protocol Type (Taxonomy)': 'Protocol Type (Taxonomy)'
     }
 
-    response = requests.post(url, json=data, headers=headers)
-    response_data = response.json()
-    if 'error' in response_data:
-        print("Failed to retrieve summary due to API error:", response_data['error']['message'])
-        return None
-    if 'choices' not in response_data or not response_data['choices']:
-        print("No response available.")
-        return None
+    for response_text in response_texts:
+        text = response_text.text  # Extract text from TextBlock object
+        sections = text.split("###")
 
-    # Extract and return detailed responses from the model's output
-    return response_data['choices'][0]['message']['content']
+        for section in sections:
+            for header, label in header_to_label.items():
+                if header in section:
+                    content = section.replace(header, '').strip()
+                    content = content.lstrip('- ').strip()
+                    details[label] = content
+                    break
 
+    return details
+
+
+#Combine specific details & LLM extracted data - Call function
+def main(file_path, claude_api_key):
+    text = extract_text_from_pdf(file_path)
+    if text is not None:
+        # Execute detailed text info / datapoints - Python
+        extracted_info = extract_info_from_pdf(file_path)
+        if extracted_info:
+            print("Extracted Information:")
+            for key, value in extracted_info.items():
+                print(f"{key}: {value}")
+
+        #LLM Data
+        response = summarize_and_extract_details_with_claude(text, claude_api_key)
+        if response:
+            parsed_details = parse_response_details(response)
+            for key, value in parsed_details.items():
+                print(f"{key}: {value}")
+    else:
+        print("Failed to extract text from the PDF.")
+
+#Detemine execution context
+if __name__ == "__main__":
+    main(file_path,claude_api_key)
+
+
+"""
+Test pdfs:
+CAR-US-and-Canada-Biochar-Protocol-V1.0.pdf
+VM0025-Campus-Clean-Energy-and-Energy-Efficiency-v1.0.pdf
+ACR-ACoF-Methodology-v1.0.pdf
+VM0047_ARR_v1.0-1.pdf
 """
