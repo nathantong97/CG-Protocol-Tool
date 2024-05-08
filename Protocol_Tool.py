@@ -288,7 +288,7 @@ def summarize_and_extract_details_with_claude(text, claude_api_key):
         "- Additionality Requirements: Explain the criteria for additionality.\n"
         "- Crediting Period: Define the crediting period, if specified.\n"
         "- Project Longevity: Describe the expected duration of project activities.\n"
-        "- Baseline Methodology: First state whether the methodology is 'Historical', 'Dynamic', or 'Both'. Then, provide a detailed explanation of how it works.\n"
+        "- Baseline Methodology: First state whether the methodology is 'Historical', 'Dynamic', or 'Historic and Dynamic'. Then, provide a detailed explanation of how it works.\n"
         "- Protocol Type (Taxonomy): First state the taxonomy category based on the Oxford Protocols.\n\n"
         "### Project Summary\n"
         "### Project Activities\n"
